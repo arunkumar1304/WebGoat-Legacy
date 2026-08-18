@@ -1,72 +1,60 @@
 pipeline {
-    agent any
+    agent any
 
-    environment {
-        BUILD_VERSION = '1'
-        IQ_SCAN_URL = ''
-    }
+    tools {
+        maven 'mvn3916'
+        jdk 'jdk8'
+    }
 
-    stages {
-        stage('Verify Jenkins Environment') {
-            steps {
-                sh 'java -version'
-                sh 'mvn -version'
-            }
-        }
+    environment {
+        ARTEFACT_NAME = "${WORKSPACE}/target/WebGoat-${BUILD_VERSION}.war"
+        IQ_SCAN_URL = ""
+    }
 
-        stage('Build WebGoat Legacy') {
-            environment {
-                JAVA_HOME = '/opt/java8'
-                PATH = "/opt/java8/bin:${env.PATH}"
-            }
+    stages {
+        stage('Build') {
+            steps {
+                sh 'mvn -B -Dproject.version=$BUILD_VERSION -Dmaven.test.failure.ignore clean package'
+            }
+            post {
+                success {
+                    echo 'Now archiving...'
+                    archiveArtifacts artifacts: '**/target/*.war'
+                }
+            }
+        }
 
-            steps {
-                sh 'java -version'
-                sh 'mvn -version'
-                sh 'mvn -B -Dmaven.test.failure.ignore=true clean package'
-            }
-        }
+        stage('Nexus IQ Scan') {
+            steps {
+                script {
+                    def policyEvaluation = nexusPolicyEvaluation(
+                        advancedProperties: '',
+                        enableDebugLogging: false,
+                        failBuildOnNetworkError: false,
+                        failBuildOnScanningErrors: false,
+                        iqApplication: selectedApplication('WebGoat legacy'),
+                        iqInstanceId: 'nxiq',
+                        iqScanPatterns: [[scanPattern: '**/*.war']],
+                        iqStage: 'build',
+                        reachability: [
+                            javaAnalysis: [
+                                enable: true
+                            ]
+                        ]
+                    )
 
-        stage('Archive WAR') {
-            steps {
-                archiveArtifacts artifacts: '**/target/*.war',
-                                 fingerprint: true
-            }
-        }
+                    echo "Nexus IQ scan succeeded: ${policyEvaluation.applicationCompositionReportUrl}"
+                    env.IQ_SCAN_URL = policyEvaluation.applicationCompositionReportUrl
+                }
+            }
 
-        stage('Sonatype IQ Evaluation') {
-            steps {
-                script {
-                    echo 'Starting Sonatype IQ evaluation...'
+            stage ("Publish to Repo"){
+                steps{
+                    script{
 
-                    def policyEvaluation = nexusPolicyEvaluation(
-                        iqApplication: selectedApplication('WebGoat-Legacy'),
-                        iqInstanceId: 'nxiq',
-                        iqStage: 'build',
-                        iqScanPatterns: [
-                            [scanPattern: '**/target/*.war']
-                        ],
-                        failBuildOnNetworkError: true,
-                        failBuildOnScanningErrors: true
-                    )
-
-                    env.IQ_SCAN_URL =
-                        policyEvaluation.applicationCompositionReportUrl
-
-                    echo "IQ Report: ${env.IQ_SCAN_URL}"
-                }
-            }
-        }
-    }
-
-    post {
-        success {
-            echo 'Build and IQ evaluation completed successfully.'
-            echo "IQ Report: ${env.IQ_SCAN_URL}"
-        }
-
-        failure {
-            echo 'Pipeline failed. Check Console Output.'
-        }
-    }
+                    }
+                }
+            }
+        }
+    }
 }
