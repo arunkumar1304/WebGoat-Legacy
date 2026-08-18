@@ -50,7 +50,12 @@ pipeline {
 
             stage ("Publish to Repo"){
                 steps{
-                    script{
+                    script{nexusPublisher nexusInstanceId: 'nxrm3',
+                        nexusRepositoryId: "maven-releases",
+                        packages: [[$class: 'MavenPackage',
+                            mavenAssetList: [[classifier: '', extension: 'war', filePath: "${ARTEFACT_NAME}"]],
+                            mavenCoordinate: [artifactId: 'WebGoat', groupId: 'org.demo', packaging: 'war', version: "${BUILD_VERSION}"]]],
+                            tagName: "${BUILD_TAG}"
 
                     }
                 }
