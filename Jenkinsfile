@@ -44,9 +44,6 @@ pipeline {
                             ]
                         ]
                     )
-
-                    echo "Nexus IQ scan succeeded: ${policyEvaluation.applicationCompositionReportUrl}"
-                    env.IQ_SCAN_URL = policyEvaluation.applicationCompositionReportUrl
                 }
             }
         }
