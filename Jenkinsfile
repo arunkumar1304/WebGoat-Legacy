@@ -1,27 +1,37 @@
 pipeline {
     agent any
 
-    tools {
-        maven 'mvn3916'
-        jdk 'jdk8'
-    }
-
     environment {
         BUILD_VERSION = '6.0.1'
         ARTEFACT_NAME = "${WORKSPACE}/target/WebGoat-${BUILD_VERSION}.war"
-        IQ_SCAN_URL = ""
-        BUILD_TAG = "webgoat-${BUILD_VERSION}"
+        BUILD_TAG_NAME = "webgoat-${BUILD_VERSION}"
     }
 
     stages {
+
         stage('Build') {
-            steps {
-                sh 'mvn -B -Dproject.version=$BUILD_VERSION -Dmaven.test.failure.ignore clean package'
+            environment {
+                JAVA_HOME = '/opt/java8'
+                PATH = "/opt/java8/bin:${env.PATH}"
             }
+
+            steps {
+                sh 'java -version'
+                sh 'mvn -version'
+
+                sh '''
+                    mvn -B \
+                      -Dproject.version=$BUILD_VERSION \
+                      -Dmaven.test.failure.ignore=true \
+                      clean package
+                '''
+            }
+
             post {
                 success {
                     echo 'Now archiving...'
-                    archiveArtifacts artifacts: '**/target/*.war'
+                    archiveArtifacts artifacts: '**/target/*.war',
+                                     fingerprint: true
                 }
             }
         }
@@ -29,14 +39,16 @@ pipeline {
         stage('Nexus IQ Scan') {
             steps {
                 script {
-                    def policyEvaluation = nexusPolicyEvaluation(
+                    nexusPolicyEvaluation(
                         advancedProperties: '',
                         enableDebugLogging: false,
                         failBuildOnNetworkError: false,
                         failBuildOnScanningErrors: false,
                         iqApplication: selectedApplication('webgoat_legacy'),
                         iqInstanceId: 'nxiq',
-                        iqScanPatterns: [[scanPattern: '**/*.war']],
+                        iqScanPatterns: [
+                            [scanPattern: '**/target/*.war']
+                        ],
                         iqStage: 'build',
                         reachability: [
                             javaAnalysis: [
@@ -54,24 +66,38 @@ pipeline {
                     nexusPublisher(
                         nexusInstanceId: 'nxrm3',
                         nexusRepositoryId: 'maven-releases',
+
                         packages: [[
                             $class: 'MavenPackage',
+
                             mavenAssetList: [[
                                 classifier: '',
                                 extension: 'war',
-                                filePath: "${ARTEFACT_NAME}"
+                                filePath: "${env.ARTEFACT_NAME}"
                             ]],
+
                             mavenCoordinate: [
-                                artifactId: 'WebGoat',
-                                groupId: 'org.demo',
+                                artifactId: 'webgoat-legacy',
+                                groupId: 'org.owasp.webgoat',
                                 packaging: 'war',
-                                version: "${BUILD_VERSION}"
+                                version: "${env.BUILD_VERSION}"
                             ]
                         ]],
-                        tagName: "${BUILD_TAG}"
+
+                        tagName: "${env.BUILD_TAG_NAME}"
                     )
                 }
             }
+        }
+    }
+
+    post {
+        success {
+            echo 'Build, IQ scan and Nexus publish completed successfully.'
+        }
+
+        failure {
+            echo 'Pipeline failed. Check the Jenkins console output.'
         }
     }
 }
