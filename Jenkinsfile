@@ -6,16 +6,22 @@ pipeline {
     }
 
     stages {
-        stage('Verify Environment') {
+        stage('Verify Jenkins Environment') {
             steps {
                 sh 'java -version'
                 sh 'mvn -version'
             }
         }
 
-        stage('Build') {
+        stage('Build WebGoat Legacy with Java 8') {
             steps {
-                sh 'mvn -B -Dproject.version=$BUILD_VERSION -Dmaven.test.failure.ignore=true clean package'
+                sh '''
+                    docker run --rm \
+                      -v "$WORKSPACE":/workspace \
+                      -w /workspace \
+                      maven:3.9.9-eclipse-temurin-8 \
+                      mvn -B -Dmaven.test.failure.ignore=true clean package
+                '''
             }
         }
 
