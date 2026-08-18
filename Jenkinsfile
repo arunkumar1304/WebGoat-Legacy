@@ -1,10 +1,6 @@
 pipeline {
     agent any
 
-    tools {
-        maven 'mvn3916'
-        jdk 'jdk8'
-    }
 
     environment {
         BUILD_VERSION = '6.0.1'
@@ -45,8 +41,6 @@ pipeline {
                         ]
                     )
 
-                    echo "Nexus IQ scan succeeded: ${policyEvaluation.applicationCompositionReportUrl}"
-                    env.IQ_SCAN_URL = policyEvaluation.applicationCompositionReportUrl
                 }
             }
         }
