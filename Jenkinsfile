@@ -10,17 +10,25 @@ pipeline {
     }
 
     stages {
-        stage('Build') {
-            steps {
-                sh 'mvn -B -Dproject.version=$BUILD_VERSION -Dmaven.test.failure.ignore clean package'
-            }
-            post {
-                success {
-                    echo 'Now archiving...'
-                    archiveArtifacts artifacts: '**/target/*.war'
-                }
-            }
+       stage('Build') {
+    environment {
+        JAVA_HOME = '/opt/java8'
+        PATH = "/opt/java8/bin:${env.PATH}"
+    }
+
+    steps {
+        sh 'java -version'
+        sh 'mvn -version'
+        sh 'mvn -B -Dproject.version=$BUILD_VERSION -Dmaven.test.failure.ignore=true clean package'
+    }
+
+    post {
+        success {
+            echo 'Now archiving...'
+            archiveArtifacts artifacts: '**/target/*.war'
         }
+    }
+}
 
         stage('Nexus IQ Scan') {
             steps {
