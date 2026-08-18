@@ -6,16 +6,25 @@ pipeline {
     }
 
     stages {
-        stage('Verify Environment') {
+        stage('Verify Jenkins Environment') {
             steps {
+                echo 'Jenkins environment - should use Java 21'
                 sh 'java -version'
                 sh 'mvn -version'
             }
         }
 
-        stage('Build') {
+        stage('Build WebGoat Legacy') {
+            environment {
+                JAVA_HOME = '/opt/java8'
+                PATH = "/opt/java8/bin:${env.PATH}"
+            }
+
             steps {
-                sh 'mvn -B -Dproject.version=$BUILD_VERSION -Dmaven.test.failure.ignore=true clean package'
+                echo 'WebGoat build environment - should use Java 8'
+                sh 'java -version'
+                sh 'mvn -version'
+                sh 'mvn -B -Dmaven.test.failure.ignore=true clean package'
             }
         }
 
