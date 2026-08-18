@@ -32,7 +32,7 @@ pipeline {
                         enableDebugLogging: false,
                         failBuildOnNetworkError: false,
                         failBuildOnScanningErrors: false,
-                        iqApplication: selectedApplication('WebGoat legacy'),
+                        iqApplication: selectedApplication('webgoat_legacy'),
                         iqInstanceId: 'nxiq',
                         iqScanPatterns: [[scanPattern: '**/*.war']],
                         iqStage: 'build',
