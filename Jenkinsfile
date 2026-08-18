@@ -1,72 +1,80 @@
 pipeline {
     agent any
 
+    tools {
+        maven 'mvn3916'
+        jdk 'jdk8'
+    }
+
     environment {
-        BUILD_VERSION = '1'
-        IQ_SCAN_URL = ''
+        BUILD_VERSION = '6.0.1'
+        ARTEFACT_NAME = "${WORKSPACE}/target/WebGoat-${BUILD_VERSION}.war"
+        IQ_SCAN_URL = ""
+        BUILD_TAG = "webgoat-${BUILD_VERSION}"
     }
 
     stages {
-        stage('Verify Jenkins Environment') {
+        stage('Build') {
             steps {
-                echo 'Jenkins environment - Java 21'
-                sh 'java -version'
-                sh 'mvn -version'
+                sh 'mvn -B -Dproject.version=$BUILD_VERSION -Dmaven.test.failure.ignore clean package'
             }
-        }
-
-        stage('Build WebGoat Legacy') {
-            environment {
-                JAVA_HOME = '/opt/java8'
-                PATH = "/opt/java8/bin:${env.PATH}"
-            }
-
-            steps {
-                echo 'Building WebGoat with Java 8'
-                sh 'java -version'
-                sh 'mvn -version'
-                sh 'mvn -B -Dmaven.test.failure.ignore=true clean package'
-            }
-        }
-
-        stage('Archive WAR') {
-            steps {
-                archiveArtifacts artifacts: '**/target/*.war', fingerprint: true
-            }
-        }
-
-        stage('Sonatype IQ Evaluation') {
-            steps {
-                script {
-                    echo 'Starting Sonatype Lifecycle policy evaluation...'
-
-                    def policyEvaluation = nexusPolicyEvaluation(
-                        iqApplication: selectedApplication('webgoat_legacy'),
-                        iqInstanceId: 'nxiq',
-                        iqStage: 'build',
-                        iqScanPatterns: [
-                            [scanPattern: '**/target/*.war']
-                        ],
-                        failBuildOnNetworkError: true,
-                        failBuildOnScanningErrors: true
-                    )
-
-                    env.IQ_SCAN_URL = policyEvaluation.applicationCompositionReportUrl
-
-                    echo "IQ Report: ${env.IQ_SCAN_URL}"
+            post {
+                success {
+                    echo 'Now archiving...'
+                    archiveArtifacts artifacts: '**/target/*.war'
                 }
             }
         }
-    }
 
-    post {
-        success {
-            echo 'Build and IQ evaluation completed successfully.'
-            echo "IQ Report: ${env.IQ_SCAN_URL}"
+        stage('Nexus IQ Scan') {
+            steps {
+                script {
+                    def policyEvaluation = nexusPolicyEvaluation(
+                        advancedProperties: '',
+                        enableDebugLogging: false,
+                        failBuildOnNetworkError: false,
+                        failBuildOnScanningErrors: false,
+                        iqApplication: selectedApplication('webgoat_legacy'),
+                        iqInstanceId: 'nxiq',
+                        iqScanPatterns: [[scanPattern: '**/*.war']],
+                        iqStage: 'build',
+                        reachability: [
+                            javaAnalysis: [
+                                enable: true
+                            ]
+                        ]
+                    )
+
+                    echo "Nexus IQ scan succeeded: ${policyEvaluation.applicationCompositionReportUrl}"
+                    env.IQ_SCAN_URL = policyEvaluation.applicationCompositionReportUrl
+                }
+            }
         }
 
-        failure {
-            echo 'Pipeline failed. Check the Jenkins Console Output.'
+        stage('Publish to Repo') {
+            steps {
+                script {
+                    nexusPublisher(
+                        nexusInstanceId: 'nxrm3',
+                        nexusRepositoryId: 'maven-releases',
+                        packages: [[
+                            $class: 'MavenPackage',
+                            mavenAssetList: [[
+                                classifier: '',
+                                extension: 'war',
+                                filePath: "${ARTEFACT_NAME}"
+                            ]],
+                            mavenCoordinate: [
+                                artifactId: 'WebGoat',
+                                groupId: 'org.demo',
+                                packaging: 'war',
+                                version: "${BUILD_VERSION}"
+                            ]
+                        ]],
+                        tagName: "${BUILD_TAG}"
+                    )
+                }
+            }
         }
     }
 }
