@@ -7,10 +7,8 @@ pipeline {
     }
 
     stages {
-
         stage('Verify Jenkins Environment') {
             steps {
-                echo 'Jenkins environment - Java 21'
                 sh 'java -version'
                 sh 'mvn -version'
             }
@@ -23,42 +21,31 @@ pipeline {
             }
 
             steps {
-                echo 'Building WebGoat with Java 8'
                 sh 'java -version'
                 sh 'mvn -version'
-
-                sh '''
-                    mvn -B \
-                    -Dmaven.test.failure.ignore=true \
-                    clean package
-                '''
+                sh 'mvn -B -Dmaven.test.failure.ignore=true clean package'
             }
         }
 
         stage('Archive WAR') {
             steps {
-                archiveArtifacts(
-                    artifacts: '**/target/*.war',
-                    fingerprint: true
-                )
+                archiveArtifacts artifacts: '**/target/*.war',
+                                 fingerprint: true
             }
         }
 
         stage('Sonatype IQ Evaluation') {
             steps {
                 script {
-
-                    echo 'Starting Sonatype Lifecycle policy evaluation...'
+                    echo 'Starting Sonatype IQ evaluation...'
 
                     def policyEvaluation = nexusPolicyEvaluation(
-                        iqApplication: selectedApplication('WebGoat legacy'),
+                        iqApplication: selectedApplication('WebGoat-Legacy'),
                         iqInstanceId: 'nxiq',
                         iqStage: 'build',
-
                         iqScanPatterns: [
                             [scanPattern: '**/target/*.war']
                         ],
-
                         failBuildOnNetworkError: true,
                         failBuildOnScanningErrors: true
                     )
@@ -66,7 +53,6 @@ pipeline {
                     env.IQ_SCAN_URL =
                         policyEvaluation.applicationCompositionReportUrl
 
-                    echo "IQ Evaluation completed."
                     echo "IQ Report: ${env.IQ_SCAN_URL}"
                 }
             }
@@ -74,14 +60,13 @@ pipeline {
     }
 
     post {
-
         success {
-            echo 'WebGoat build and IQ evaluation completed successfully.'
+            echo 'Build and IQ evaluation completed successfully.'
             echo "IQ Report: ${env.IQ_SCAN_URL}"
         }
 
         failure {
-            echo 'Pipeline failed. Check the Jenkins Console Output.'
+            echo 'Pipeline failed. Check Console Output.'
         }
     }
 }
